@@ -1,0 +1,76 @@
+name: Test ntfy notifications
+
+on:
+  workflow_dispatch:
+    inputs:
+      event:
+        description: "Какое тестовое уведомление отправить"
+        required: true
+        type: choice
+        default: stream_started
+        options:
+          - stream_started
+          - stream_ended
+          - title_changed_live
+          - game_changed_live
+          - status_changed_offline
+          - all
+      channel:
+        description: "Название Twitch-канала для примера"
+        required: true
+        type: string
+        default: skillightv
+
+permissions:
+  contents: read
+
+jobs:
+  send-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    steps:
+      - name: Send selected test notification
+        env:
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+          NTFY_SERVER: ${{ vars.NTFY_SERVER }}
+          TEST_EVENT: ${{ inputs.event }}
+          TEST_CHANNEL: ${{ inputs.channel }}
+        run: |
+          python3 - <<'PY'
+          import os, re, sys, urllib.parse, urllib.request
+
+          topic = os.environ.get("NTFY_TOPIC", "").strip()
+          server = os.environ.get("NTFY_SERVER", "https://ntfy.sh").strip().rstrip("/") or "https://ntfy.sh"
+          event = os.environ["TEST_EVENT"]
+          channel = os.environ["TEST_CHANNEL"].strip()
+          if not topic:
+              sys.exit("ERROR: GitHub secret NTFY_TOPIC is not configured")
+          if not re.fullmatch(r"[A-Za-z0-9_]{1,25}", channel):
+              sys.exit("ERROR: Enter a valid Twitch channel login")
+
+          examples = {
+              "stream_started": ("Stream started", f"👾 {channel} запустил трансляцию\nТестовое уведомление: начало эфира.\n\ntwitch.tv/{channel}", "twitch,video"),
+              "stream_ended": ("Stream ended", f"Стрим {channel} закончился.\nТестовое уведомление: завершение эфира.\n\ntwitch.tv/{channel}", "twitch,video"),
+              "title_changed_live": ("Live stream updated", f"{channel} обновил название трансляции.\nТестовое уведомление: изменение названия во время эфира.\n\ntwitch.tv/{channel}", "twitch,video"),
+              "game_changed_live": ("Live category changed", f"{channel} изменил категорию.\nТестовое уведомление: изменение игры во время эфира.\n\ntwitch.tv/{channel}", "twitch,video"),
+              "status_changed_offline": ("Channel status updated", f"{channel} обновил статус канала.\nТестовое уведомление: изменение статуса, когда канал оффлайн.\n\ntwitch.tv/{channel}", "twitch,video"),
+          }
+          selected = list(examples) if event == "all" else [event]
+          if any(item not in examples for item in selected):
+              sys.exit("ERROR: Unknown test event")
+
+          url = server + "/" + urllib.parse.quote(topic, safe="")
+          for item in selected:
+              title, message, tags = examples[item]
+              request = urllib.request.Request(
+                  url,
+                  data=message.encode("utf-8"),
+                  method="POST",
+                  headers={"Content-Type": "text/plain; charset=utf-8", "Title": "Twitch Live Watch: " + title, "Priority": "high", "Tags": tags, "Click": "https://www.twitch.tv/" + channel},
+              )
+              with urllib.request.urlopen(request, timeout=20) as response:
+                  if not 200 <= response.status < 300:
+                      sys.exit(f"ntfy returned HTTP {response.status}")
+              print("Sent test:", item)
+          print(f"Successfully sent {len(selected)} test notification(s).")
+          PY
