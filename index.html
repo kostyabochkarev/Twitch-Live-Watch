@@ -96,7 +96,8 @@ button:disabled{opacity:.5}
 <p class="help">Фоновый мониторинг работает отдельно через GitHub Actions. Он проверяет каналы из файла channels.txt примерно каждые 5 минут и отправляет push-уведомления через ntfy.</p>
 <div class="notice">Cloudflare Worker и ADMIN_TOKEN не нужны. Чтобы изменить список каналов фонового мониторинга, открой channels.txt в GitHub. Для ручной проверки и запуска настроенных workflow используй GitHub Actions.</div>
 <div class="row" style="margin-top:13px">
-<button type="button" onclick="window.open('https://github.com/kostyabochkarev/Twitch-Live-Watch/actions','_blank','noopener')">Открыть GitHub Actions</button>
+<button type="button" onclick="window.open('https://github.com/kostyabochkarev/Twitch-Live-Watch/actions/workflows/test-notifications.yml','_blank','noopener')">🔔 Проверить уведомления</button>
+<button type="button" class="secondary" onclick="window.open('https://github.com/kostyabochkarev/Twitch-Live-Watch/actions','_blank','noopener')">Открыть GitHub Actions</button>
 <button type="button" class="secondary" onclick="window.open('https://github.com/kostyabochkarev/Twitch-Live-Watch/blob/main/channels.txt','_blank','noopener')">Открыть channels.txt</button>
 </div>
 </section>
