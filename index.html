@@ -619,21 +619,28 @@ setNotificationStatus('Сообщение получено, но системн�
 
 function displayNtfyMessage(data){
 const title=String(data.title||'Twitch Live Watch').replace(/^Twitch Live Watch:\s*/i,'');
-const message=String(data.message||'Новое уведомление Twitch Live Watch');
-addNotificationToFeed(title,message);
+const rawMessage=String(data.message||'Новое уведомление Twitch Live Watch');
 
 for(const [testId,label] of pendingNtfyTestIds){
-if(message.includes(testId)){
+if(rawMessage.includes(testId)){
 pendingNtfyTestIds.delete(testId);
 setNotificationStatus('Тест «'+label+'» получен через ntfy. Системное уведомление отправлено браузеру.','connected');
 break;
 }
 }
 
-if(pendingNtfyTestId&&message.includes(pendingNtfyTestId)){
+if(pendingNtfyTestId&&rawMessage.includes(pendingNtfyTestId)){
 setNotificationStatus('Проверка пройдена: ntfy принял тест и вернул его в эту страницу.','connected');
 pendingNtfyTestId='';
 }
+
+// Технические идентификаторы нужны только для проверки доставки и не должны
+// попадать в ленту или системное уведомление.
+const message=rawMessage
+.replace(/\\bTLW-TEST-(?:[A-Z-]+-)?\\d+\\b\\s*/gi,'')
+.replace(/\\n{3,}/g,'\\n\\n')
+.trim();
+addNotificationToFeed(title,message);
 
 if('Notification' in window&&Notification.permission==='granted'){
 void showNtfySystemNotification(title,message,data);
