@@ -683,11 +683,6 @@ setNotificationStatus('Отправляю тестовое сообщение ч
 try{
 const response=await fetch(server+'/'+encodeURIComponent(topic),{
 method:'POST',
-headers:{
-'Content-Type':'text/plain; charset=utf-8',
-'Title':'Twitch Live Watch: Проверка связи',
-'Priority':'3'
-},
 body:message,
 cache:'no-store'
 });
