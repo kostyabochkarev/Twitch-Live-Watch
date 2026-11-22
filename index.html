@@ -637,8 +637,8 @@ pendingNtfyTestId='';
 // Технические идентификаторы нужны только для проверки доставки и не должны
 // попадать в ленту или системное уведомление.
 const message=rawMessage
-.replace(/\\bTLW-TEST-(?:[A-Z-]+-)?\\d+\\b\\s*/gi,'')
-.replace(/\\n{3,}/g,'\\n\\n')
+.replace(/\bTLW-TEST-(?:[A-Z-]+-)?\d+\b\s*/gi,'')
+.replace(/\n{3,}/g,'\n\n')
 .trim();
 addNotificationToFeed(title,message);
 
