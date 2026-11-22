@@ -574,7 +574,7 @@ return url.href;
 return '';
 }
 
-let pendingNtfyTestId='';
+let pendingNtfyTestMarker='';
 
 let ntfyServiceWorkerPromise=null;
 
@@ -621,17 +621,17 @@ function displayNtfyMessage(data){
 const title=String(data.title||'Twitch Live Watch').replace(/^Twitch Live Watch:\s*/i,'');
 const rawMessage=String(data.message||'Новое уведомление Twitch Live Watch');
 
-for(const [testId,label] of pendingNtfyTestIds){
-if(rawMessage.includes(testId)){
-pendingNtfyTestIds.delete(testId);
+for(const [testMarker,label] of pendingNtfyTestMarkers){
+if(rawMessage.includes(testMarker)){
+pendingNtfyTestMarkers.delete(testMarker);
 setNotificationStatus('Тест «'+label+'» получен через ntfy. Системное уведомление отправлено браузеру.','connected');
 break;
 }
 }
 
-if(pendingNtfyTestId&&rawMessage.includes(pendingNtfyTestId)){
+if(pendingNtfyTestMarker&&rawMessage.includes(pendingNtfyTestMarker)){
 setNotificationStatus('Проверка пройдена: ntfy принял тест и вернул его в эту страницу.','connected');
-pendingNtfyTestId='';
+pendingNtfyTestMarker='';
 }
 
 // Технические идентификаторы нужны только для проверки доставки и не должны
@@ -720,26 +720,30 @@ localStorage.setItem(NTFY_SETTINGS_KEY,JSON.stringify({topic,server}));
 startNtfySubscription(topic,server);
 }
 
-const pendingNtfyTestIds=new Map();
+const pendingNtfyTestMarkers=new Map();
 
 const NTFY_TEST_ALERTS={
 started:{
 label:'начало эфира',
+marker:'Проверка уведомления: новый эфир',
 title:'Stream started',
 message:'👾 ТестовыйКанал завёл стрим\nПроверка уведомления: новый эфир\n\nИграет в: Just Chatting\nЗрителей: 128\n\ntwitch.tv/skillightv'
 },
 ended:{
 label:'окончание эфира',
+marker:'Проверка уведомления об окончании эфира',
 title:'Stream ended',
 message:'Стрим ТестовыйКанал закончился.\nЗрителей на стриме: 128 (последнее известное значение)\n\nПроверка уведомления об окончании эфира\nИгра: Just Chatting\n\n____\nСтрим сейчас оффлайн\n\ntwitch.tv/skillightv'
 },
 'live-updated':{
 label:'изменение статуса во время эфира',
+marker:'Проверка: изменилось название трансляции или категория',
 title:'Live stream updated',
 message:'ТестовыйКанал обновил статус:\n\nПроверка: изменилось название трансляции или категория\n\nИграет в: Just Chatting\n\ntwitch.tv/skillightv'
 },
 'offline-updated':{
 label:'изменение статуса офлайн',
+marker:'Проверка: изменилось название или категория канала',
 title:'Channel status updated',
 message:'ТестовыйКанал обновил статус:\n\nПроверка: изменилось название или категория канала\nИгра: Just Chatting\n____\nСтрим сейчас оффлайн\n\ntwitch.tv/skillightv'
 }
@@ -773,24 +777,24 @@ if(!alert){
 setNotificationStatus('Неизвестный тип тестового оповещения.','error');
 return;
 }
-const testId='TLW-TEST-'+type.toUpperCase()+'-'+Date.now();
+const testMarker=alert.marker;
 const params=new URLSearchParams({
 title:'Twitch Live Watch: '+alert.title,
-message:testId+'\n'+alert.message,
+message:alert.message,
 priority:'high',
 tags:'twitch,video',
 click:'https://www.twitch.tv/skillightv'
 });
 const url=server+'/'+encodeURIComponent(topic)+'/publish?'+params.toString();
-pendingNtfyTestIds.set(testId,alert.label);
+pendingNtfyTestMarkers.set(testMarker,alert.label);
 setNotificationStatus('Отправляю тест «'+alert.label+'»…','');
 try{
 await fetch(url,{method:'GET',mode:'no-cors',cache:'no-store'});
-if(pendingNtfyTestIds.has(testId)){
+if(pendingNtfyTestMarkers.has(testMarker)){
 setNotificationStatus('Тест «'+alert.label+'» отправлен. Жду подтверждение от ntfy…','');
 }
 }catch(error){
-pendingNtfyTestIds.delete(testId);
+pendingNtfyTestMarkers.delete(testMarker);
 setNotificationStatus('Не удалось отправить тест «'+alert.label+'»: '+(error.message||error),'error');
 }
 }
@@ -818,8 +822,8 @@ if(!saved||saved.topic!==topic||saved.server!==server||ntfySource.readyState!==1
 setNotificationStatus('Подписка не подключена к этой теме. Нажми «Включить уведомления» ещё раз и дождись статуса «Подключено».','error');
 return;
 }
-pendingNtfyTestId='TLW-TEST-'+Date.now();
-const message=pendingNtfyTestId+' Проверка реальной доставки Twitch Live Watch.';
+pendingNtfyTestMarker='Проверка связи ntfy';
+const message=pendingNtfyTestMarker+'. Тестовое сообщение Twitch Live Watch.';
 setNotificationStatus('Отправляю тестовое сообщение через ntfy…','');
 try{
 await fetch(server+'/'+encodeURIComponent(topic),{
@@ -830,7 +834,7 @@ cache:'no-store'
 });
 setNotificationStatus('Запрос отправлен. Жду подтверждение от активной подписки ntfy…','');
 }catch(error){
-pendingNtfyTestId='';
+pendingNtfyTestMarker='';
 setNotificationStatus('Не удалось отправить тест в ntfy: '+(error.message||error)+'. Проверь сервер, тему и подключение к интернету.','error');
 }
 }
