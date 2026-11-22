@@ -566,7 +566,7 @@ return '';
 }
 
 function displayNtfyMessage(data){
-const title=String(data.title||'Twitch Live Watch').replace(/^Twitch Live Watch:\\s*/i,'');
+const title=String(data.title||'Twitch Live Watch').replace(/^Twitch Live Watch:\s*/i,'');
 const message=String(data.message||'Новое уведомление Twitch Live Watch');
 const clickUrl=twitchClickUrl(data.click);
 addNotificationToFeed(title,message);
@@ -638,7 +638,7 @@ let server;
 try{
 const parsed=new URL($('ntfyServerInput').value.trim()||'https://ntfy.sh');
 if(parsed.protocol!=='https:')throw new Error('Используй HTTPS-адрес сервера ntfy.');
-server=parsed.origin+parsed.pathname.replace(/\\/+$/,'');
+server=parsed.origin+parsed.pathname.replace(/\/+$/,'');
 }catch(error){
 setNotificationStatus(error.message||'Некорректный адрес ntfy-сервера.','error');
 return;
