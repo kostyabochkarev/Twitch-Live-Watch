@@ -61,6 +61,8 @@ button:disabled{opacity:.5}
 .notification-item span{display:block;color:var(--muted);font-size:13px;white-space:pre-wrap;overflow-wrap:anywhere;margin-top:3px}
 .notification-connected{color:var(--green)}
 .notification-error{color:var(--red)}
+.notification-tests{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:10px}
+.notification-tests button{width:100%;font-size:14px}
 @media(min-width:650px){
 .grid{grid-template-columns:repeat(2,minmax(0,1fr))}
 .toolbar{flex-direction:row;align-items:center;justify-content:space-between}
@@ -108,6 +110,13 @@ button:disabled{opacity:.5}
 <button type="button" id="enableNotifications">🔔 Включить уведомления</button>
 <button type="button" class="secondary" id="testNotification">Проверить связь с ntfy</button>
 <button type="button" class="secondary" id="disableNotifications">Отключить</button>
+</div>
+<p class="help" style="margin-top:14px"><b>Тесты отдельных оповещений</b></p>
+<div class="notification-tests">
+<button type="button" class="secondary" data-ntfy-test="started">▶ Начало эфира</button>
+<button type="button" class="secondary" data-ntfy-test="ended">■ Окончание эфира</button>
+<button type="button" class="secondary" data-ntfy-test="live-updated">✎ Изменение во время эфира</button>
+<button type="button" class="secondary" data-ntfy-test="offline-updated">✎ Изменение офлайн</button>
 </div>
 <p class="help" id="notificationStatus" aria-live="polite">Не подключено. Введи тему ntfy и нажми «Включить уведомления».</p>
 <div id="notificationFeed" class="notification-feed" aria-live="polite"></div>
@@ -613,6 +622,14 @@ const title=String(data.title||'Twitch Live Watch').replace(/^Twitch Live Watch:
 const message=String(data.message||'Новое уведомление Twitch Live Watch');
 addNotificationToFeed(title,message);
 
+for(const [testId,label] of pendingNtfyTestIds){
+if(message.includes(testId)){
+pendingNtfyTestIds.delete(testId);
+setNotificationStatus('Тест «'+label+'» получен через ntfy. Системное уведомление отправлено браузеру.','connected');
+break;
+}
+}
+
 if(pendingNtfyTestId&&message.includes(pendingNtfyTestId)){
 setNotificationStatus('Проверка пройдена: ntfy принял тест и вернул его в эту страницу.','connected');
 pendingNtfyTestId='';
@@ -696,6 +713,79 @@ localStorage.setItem(NTFY_SETTINGS_KEY,JSON.stringify({topic,server}));
 startNtfySubscription(topic,server);
 }
 
+const pendingNtfyTestIds=new Map();
+
+const NTFY_TEST_ALERTS={
+started:{
+label:'начало эфира',
+title:'Stream started',
+message:'👾 ТестовыйКанал завёл стрим\\nПроверка уведомления: новый эфир\\n\\nИграет в: Just Chatting\\nЗрителей: 128\\n\\ntwitch.tv/skillightv'
+},
+ended:{
+label:'окончание эфира',
+title:'Stream ended',
+message:'Стрим ТестовыйКанал закончился.\\nЗрителей на стриме: 128 (последнее известное значение)\\n\\nПроверка уведомления об окончании эфира\\nИгра: Just Chatting\\n\\n____\\nСтрим сейчас оффлайн\\n\\ntwitch.tv/skillightv'
+},
+'live-updated':{
+label:'изменение статуса во время эфира',
+title:'Live stream updated',
+message:'ТестовыйКанал обновил статус:\\n\\nПроверка: изменилось название трансляции или категория\\n\\nИграет в: Just Chatting\\n\\ntwitch.tv/skillightv'
+},
+'offline-updated':{
+label:'изменение статуса офлайн',
+title:'Channel status updated',
+message:'ТестовыйКанал обновил статус:\\n\\nПроверка: изменилось название или категория канала\\nИгра: Just Chatting\\n____\\nСтрим сейчас оффлайн\\n\\ntwitch.tv/skillightv'
+}
+};
+
+async function testNtfyAlert(type){
+if(!ntfySource){
+setNotificationStatus('Сначала введи тему и нажми «Включить уведомления».','error');
+return;
+}
+const topic=$('ntfyTopicInput').value.trim();
+let server;
+try{
+const parsed=new URL($('ntfyServerInput').value.trim()||'https://ntfy.sh');
+if(parsed.protocol!=='https:')throw new Error('Используй HTTPS-адрес сервера ntfy.');
+server=parsed.origin+parsed.pathname.replace(/\\/+$/,'');
+}catch(error){
+setNotificationStatus(error.message||'Некорректный адрес ntfy-сервера.','error');
+return;
+}
+let saved;
+try{
+saved=JSON.parse(localStorage.getItem(NTFY_SETTINGS_KEY)||'null');
+}catch{}
+if(!saved||saved.topic!==topic||saved.server!==server||ntfySource.readyState!==1){
+setNotificationStatus('Подписка не подключена к этой теме. Нажми «Включить уведомления» и дождись статуса «Подключено».','error');
+return;
+}
+const alert=NTFY_TEST_ALERTS[type];
+if(!alert){
+setNotificationStatus('Неизвестный тип тестового оповещения.','error');
+return;
+}
+const testId='TLW-TEST-'+type.toUpperCase()+'-'+Date.now();
+const params=new URLSearchParams({
+title:'Twitch Live Watch: '+alert.title,
+message:testId+'\\n'+alert.message,
+priority:'high',
+tags:'twitch,video',
+click:'https://www.twitch.tv/skillightv'
+});
+const url=server+'/'+encodeURIComponent(topic)+'/publish?'+params.toString();
+pendingNtfyTestIds.set(testId,alert.label);
+setNotificationStatus('Отправляю тест «'+alert.label+'»…','');
+try{
+await fetch(url,{method:'GET',mode:'no-cors',cache:'no-store'});
+setNotificationStatus('Тест «'+alert.label+'» отправлен. Жду подтверждение от ntfy…','');
+}catch(error){
+pendingNtfyTestIds.delete(testId);
+setNotificationStatus('Не удалось отправить тест «'+alert.label+'»: '+(error.message||error),'error');
+}
+}
+
 async function testNtfyNotification(){
 if(!ntfySource){
 setNotificationStatus('Сначала введи тему и нажми «Включить уведомления».','error');
@@ -749,6 +839,9 @@ setNotificationStatus('Подписка отключена.','');
 $('enableNotifications').addEventListener('click',enableNtfyNotifications);
 $('testNotification').addEventListener('click',testNtfyNotification);
 $('disableNotifications').addEventListener('click',disableNtfyNotifications);
+document.querySelectorAll('[data-ntfy-test]').forEach(button=>{
+button.addEventListener('click',()=>testNtfyAlert(button.dataset.ntfyTest));
+});
 
 try{
 const saved=JSON.parse(localStorage.getItem(NTFY_SETTINGS_KEY)||'null');
