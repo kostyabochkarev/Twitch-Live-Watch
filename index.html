@@ -637,8 +637,8 @@ setNotificationStatus('Для системных уведомлений нуже
 return;
 }
 const topic=$('ntfyTopicInput').value.trim();
-if(!topic||topic.length>64||/[\\s/#?&+]/.test(topic)){
-setNotificationStatus('Введи тему ntfy длиной 1–64 символа без пробелов и символов / # ? & +. Используй точное значение NTFY_TOPIC.','error');
+if(!topic||topic.length>64||!/^[A-Za-z0-9_-]+$/.test(topic)){
+setNotificationStatus('Тема должна содержать только латинские буквы, цифры, дефис или подчёркивание (1–64 символа). Введи само значение NTFY_TOPIC, без URL.','error');
 return;
 }
 let server;
