@@ -106,12 +106,12 @@ button:disabled{opacity:.5}
 </div>
 <div class="row" style="margin-top:13px">
 <button type="button" id="enableNotifications">🔔 Включить уведомления</button>
-<button type="button" class="secondary" id="testNotification">Проверить уведомление</button>
+<button type="button" class="secondary" id="testNotification">Проверить связь с ntfy</button>
 <button type="button" class="secondary" id="disableNotifications">Отключить</button>
 </div>
 <p class="help" id="notificationStatus" aria-live="polite">Не подключено. Введи тему ntfy и нажми «Включить уведомления».</p>
 <div id="notificationFeed" class="notification-feed" aria-live="polite"></div>
-<div class="notice">Укажи ту же тему, которая записана в GitHub Secret <b>NTFY_TOPIC</b> для фонового монитора. Тема хранится только в этом браузере. Системные уведомления приходят, пока эта страница открыта; для работы после закрытия сайта нужна отдельная настройка Web Push.</div>
+<div class="notice">Укажи ту же тему, которая записана в GitHub Secret <b>NTFY_TOPIC</b>. Кнопка проверки отправляет настоящее сообщение в ntfy и ждёт его возврата в эту страницу. Чтобы получать уведомления, когда сайт закрыт, открой <a class="link" href="https://ntfy.sh/app" target="_blank" rel="noopener noreferrer">ntfy Web</a>, подпишись на ту же тему и включи Background notifications в настройках ntfy.</div>
 </section>
 
 <div class="stats">
@@ -565,11 +565,18 @@ return url.href;
 return '';
 }
 
+let pendingNtfyTestId='';
+
 function displayNtfyMessage(data){
 const title=String(data.title||'Twitch Live Watch').replace(/^Twitch Live Watch:\s*/i,'');
 const message=String(data.message||'Новое уведомление Twitch Live Watch');
 const clickUrl=twitchClickUrl(data.click);
 addNotificationToFeed(title,message);
+
+if(pendingNtfyTestId&&message.includes(pendingNtfyTestId)){
+setNotificationStatus('Проверка пройдена: ntfy принял тест и вернул его в эту страницу.','connected');
+pendingNtfyTestId='';
+}
 
 if('Notification' in window&&Notification.permission==='granted'){
 try{
@@ -655,24 +662,40 @@ localStorage.setItem(NTFY_SETTINGS_KEY,JSON.stringify({topic,server}));
 startNtfySubscription(topic,server);
 }
 
-function testBrowserNotification(){
-if(!('Notification' in window)){
-setNotificationStatus('Этот браузер не поддерживает системные уведомления.','error');
+async function testNtfyNotification(){
+if(!ntfySource){
+setNotificationStatus('Сначала введи тему и нажми «Включить уведомления».','error');
 return;
 }
-if(Notification.permission!=='granted'){
-setNotificationStatus('Сначала нажми «Включить уведомления» и разреши их показ.','error');
-return;
-}
-const title='Twitch Live Watch — проверка';
-const message='Тестовое уведомление браузера работает.';
-addNotificationToFeed(title,message);
+const topic=$('ntfyTopicInput').value.trim();
+let server;
 try{
-const notice=new Notification(title,{body:message,tag:'tlw-browser-test-'+Date.now()});
-notice.onclick=()=>{window.focus();notice.close();};
-setNotificationStatus('Тестовое системное уведомление отправлено браузером.','connected');
+const parsed=new URL($('ntfyServerInput').value.trim()||'https://ntfy.sh');
+if(parsed.protocol!=='https:')throw new Error('Используй HTTPS-адрес сервера ntfy.');
+server=parsed.origin+parsed.pathname.replace(/\/+$/,'');
 }catch(error){
-setNotificationStatus('Не удалось показать уведомление: '+(error.message||error),'error');
+setNotificationStatus(error.message||'Некорректный адрес ntfy-сервера.','error');
+return;
+}
+pendingNtfyTestId='TLW-TEST-'+Date.now();
+const message=pendingNtfyTestId+' Проверка реальной доставки Twitch Live Watch.';
+setNotificationStatus('Отправляю тестовое сообщение через ntfy…','');
+try{
+const response=await fetch(server+'/'+encodeURIComponent(topic),{
+method:'POST',
+headers:{
+'Content-Type':'text/plain; charset=utf-8',
+'Title':'Twitch Live Watch: Проверка связи',
+'Priority':'3'
+},
+body:message,
+cache:'no-store'
+});
+if(!response.ok)throw new Error('ntfy вернул HTTP '+response.status);
+setNotificationStatus('ntfy принял тест. Жду, когда сообщение вернётся по активной подписке…','');
+}catch(error){
+pendingNtfyTestId='';
+setNotificationStatus('Не удалось отправить тест в ntfy: '+(error.message||error)+'. Проверь сервер, тему и подключение к интернету.','error');
 }
 }
 
@@ -687,7 +710,7 @@ setNotificationStatus('Подписка отключена.','');
 }
 
 $('enableNotifications').addEventListener('click',enableNtfyNotifications);
-$('testNotification').addEventListener('click',testBrowserNotification);
+$('testNotification').addEventListener('click',testNtfyNotification);
 $('disableNotifications').addEventListener('click',disableNtfyNotifications);
 
 try{
