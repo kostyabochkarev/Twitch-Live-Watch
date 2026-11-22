@@ -55,6 +55,12 @@ button:disabled{opacity:.5}
 .bar{height:100%;width:0;background:var(--purple)}
 .foot{text-align:center;color:#777;font-size:12px;margin-top:24px}
 .link{color:#c8a7ff}
+.notification-feed{display:grid;gap:8px;margin-top:12px}
+.notification-item{padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:#111114}
+.notification-item strong{display:block;font-size:14px}
+.notification-item span{display:block;color:var(--muted);font-size:13px;white-space:pre-wrap;overflow-wrap:anywhere;margin-top:3px}
+.notification-connected{color:var(--green)}
+.notification-error{color:var(--red)}
 @media(min-width:650px){
 .grid{grid-template-columns:repeat(2,minmax(0,1fr))}
 .toolbar{flex-direction:row;align-items:center;justify-content:space-between}
@@ -91,15 +97,21 @@ button:disabled{opacity:.5}
 <div class="notice">Сайт проверяет публичный статус через DecAPI. Список каналов на этой странице хранится в памяти браузера.</div>
 </section>
 
-<section class="panel">
-<h2>Фоновая работа и уведомления</h2>
-<p class="help">Фоновый мониторинг работает отдельно через GitHub Actions. Он проверяет каналы из файла channels.txt примерно каждые 5 минут и отправляет push-уведомления через ntfy.</p>
-<div class="notice">Cloudflare Worker и ADMIN_TOKEN не нужны. Чтобы изменить список каналов фонового мониторинга, открой channels.txt в GitHub. Для ручной проверки и запуска настроенных workflow используй GitHub Actions.</div>
-<div class="row" style="margin-top:13px">
-<button type="button" onclick="window.open('https://github.com/kostyabochkarev/Twitch-Live-Watch/actions/workflows/test-notifications.yml','_blank','noopener')">🔔 Проверить уведомления</button>
-<button type="button" class="secondary" onclick="window.open('https://github.com/kostyabochkarev/Twitch-Live-Watch/actions','_blank','noopener')">Открыть GitHub Actions</button>
-<button type="button" class="secondary" onclick="window.open('https://github.com/kostyabochkarev/Twitch-Live-Watch/blob/main/channels.txt','_blank','noopener')">Открыть channels.txt</button>
+<section class="panel" id="notificationPanel">
+<h2>Уведомления браузера</h2>
+<p class="help">Подключись к своему ntfy-каналу. Когда фоновый монитор обнаружит начало или окончание эфира либо изменение статуса, сайт покажет системное уведомление.</p>
+<div class="row">
+<input id="ntfyTopicInput" placeholder="Тема ntfy (значение NTFY_TOPIC)" autocomplete="off" autocapitalize="none" spellcheck="false">
+<input id="ntfyServerInput" value="https://ntfy.sh" placeholder="Сервер ntfy" autocomplete="url" autocapitalize="none" spellcheck="false">
 </div>
+<div class="row" style="margin-top:13px">
+<button type="button" id="enableNotifications">🔔 Включить уведомления</button>
+<button type="button" class="secondary" id="testNotification">Проверить уведомление</button>
+<button type="button" class="secondary" id="disableNotifications">Отключить</button>
+</div>
+<p class="help" id="notificationStatus" aria-live="polite">Не подключено. Введи тему ntfy и нажми «Включить уведомления».</p>
+<div id="notificationFeed" class="notification-feed" aria-live="polite"></div>
+<div class="notice">Укажи ту же тему, которая записана в GitHub Secret <b>NTFY_TOPIC</b> для фонового монитора. Тема хранится только в этом браузере. Системные уведомления приходят, пока эта страница открыта; для работы после закрытия сайта нужна отдельная настройка Web Push.</div>
 </section>
 
 <div class="stats">
@@ -518,6 +530,179 @@ $('refreshText').textContent='Канал добавлен. Проверяю ег
 
 refreshAll();
 }
+
+
+const NTFY_SETTINGS_KEY='tlw_ntfy_settings';
+let ntfySource=null;
+const seenNtfyIds=new Set();
+
+function setNotificationStatus(message,kind=''){
+const el=$('notificationStatus');
+el.textContent=message;
+el.className='help'+(kind?' notification-'+kind:'');
+}
+
+function addNotificationToFeed(title,message){
+const root=$('notificationFeed');
+const item=document.createElement('div');
+item.className='notification-item';
+const heading=document.createElement('strong');
+heading.textContent=title||'Twitch Live Watch';
+const body=document.createElement('span');
+body.textContent=message||'Новое уведомление';
+item.append(heading,body);
+root.prepend(item);
+while(root.children.length>8)root.lastElementChild.remove();
+}
+
+function twitchClickUrl(value){
+try{
+const url=new URL(value);
+if(url.protocol==='https:'&&(url.hostname==='twitch.tv'||url.hostname==='www.twitch.tv')){
+return url.href;
+}
+}catch{}
+return '';
+}
+
+function displayNtfyMessage(data){
+const title=String(data.title||'Twitch Live Watch').replace(/^Twitch Live Watch:\\s*/i,'');
+const message=String(data.message||'Новое уведомление Twitch Live Watch');
+const clickUrl=twitchClickUrl(data.click);
+addNotificationToFeed(title,message);
+
+if('Notification' in window&&Notification.permission==='granted'){
+try{
+const notice=new Notification(title,{
+body:message,
+tag:'tlw-'+String(data.id||Date.now()),
+renotify:true
+});
+notice.onclick=()=>{
+window.focus();
+if(clickUrl)window.open(clickUrl,'_blank','noopener');
+notice.close();
+};
+}catch(error){
+setNotificationStatus('Сообщение получено, но браузер не смог показать системное уведомление: '+(error.message||error),'error');
+}
+}
+}
+
+function startNtfySubscription(topic,server){
+if(ntfySource){
+ntfySource.close();
+ntfySource=null;
+}
+const url=server+'/'+encodeURIComponent(topic)+'/sse';
+const source=new EventSource(url);
+ntfySource=source;
+source.onopen=()=>{
+if(ntfySource===source)setNotificationStatus('Подключено к ntfy. Ожидаю уведомления о каналах.','connected');
+};
+source.onerror=()=>{
+if(ntfySource===source)setNotificationStatus('Связь с ntfy временно потеряна. Браузер пытается переподключиться…','error');
+};
+source.onmessage=(event)=>{
+try{
+const data=JSON.parse(event.data);
+if(data.event!=='message')return;
+const id=String(data.id||'');
+if(id&&seenNtfyIds.has(id))return;
+if(id){
+seenNtfyIds.add(id);
+if(seenNtfyIds.size>200)seenNtfyIds.delete(seenNtfyIds.values().next().value);
+}
+displayNtfyMessage(data);
+}catch(error){
+console.warn('Не удалось разобрать уведомление ntfy:',error);
+}
+};
+}
+
+async function enableNtfyNotifications(){
+if(!('Notification' in window)){
+setNotificationStatus('Этот браузер не поддерживает системные уведомления.','error');
+return;
+}
+if(!window.isSecureContext){
+setNotificationStatus('Для системных уведомлений нужен HTTPS. Открой сайт через GitHub Pages.','error');
+return;
+}
+const topic=$('ntfyTopicInput').value.trim();
+if(!topic||! /^[A-Za-z0-9_-]{1,128}$/.test(topic)){
+setNotificationStatus('Введи корректную тему ntfy (латинские буквы, цифры, дефис или подчёркивание).','error');
+return;
+}
+let server;
+try{
+const parsed=new URL($('ntfyServerInput').value.trim()||'https://ntfy.sh');
+if(parsed.protocol!=='https:')throw new Error('Используй HTTPS-адрес сервера ntfy.');
+server=parsed.origin+parsed.pathname.replace(/\\/+$/,'');
+}catch(error){
+setNotificationStatus(error.message||'Некорректный адрес ntfy-сервера.','error');
+return;
+}
+let permission=Notification.permission;
+if(permission==='default'){
+permission=await Notification.requestPermission();
+}
+if(permission!=='granted'){
+setNotificationStatus('Разреши уведомления для этого сайта в настройках браузера.','error');
+return;
+}
+localStorage.setItem(NTFY_SETTINGS_KEY,JSON.stringify({topic,server}));
+startNtfySubscription(topic,server);
+}
+
+function testBrowserNotification(){
+if(!('Notification' in window)){
+setNotificationStatus('Этот браузер не поддерживает системные уведомления.','error');
+return;
+}
+if(Notification.permission!=='granted'){
+setNotificationStatus('Сначала нажми «Включить уведомления» и разреши их показ.','error');
+return;
+}
+const title='Twitch Live Watch — проверка';
+const message='Тестовое уведомление браузера работает.';
+addNotificationToFeed(title,message);
+try{
+const notice=new Notification(title,{body:message,tag:'tlw-browser-test-'+Date.now()});
+notice.onclick=()=>{window.focus();notice.close();};
+setNotificationStatus('Тестовое системное уведомление отправлено браузером.','connected');
+}catch(error){
+setNotificationStatus('Не удалось показать уведомление: '+(error.message||error),'error');
+}
+}
+
+function disableNtfyNotifications(){
+if(ntfySource){
+ntfySource.close();
+ntfySource=null;
+}
+localStorage.removeItem(NTFY_SETTINGS_KEY);
+$('ntfyTopicInput').value='';
+setNotificationStatus('Подписка отключена.','');
+}
+
+$('enableNotifications').addEventListener('click',enableNtfyNotifications);
+$('testNotification').addEventListener('click',testBrowserNotification);
+$('disableNotifications').addEventListener('click',disableNtfyNotifications);
+
+try{
+const saved=JSON.parse(localStorage.getItem(NTFY_SETTINGS_KEY)||'null');
+if(saved&&saved.topic&&saved.server){
+$('ntfyTopicInput').value=saved.topic;
+$('ntfyServerInput').value=saved.server;
+if('Notification' in window&&Notification.permission==='granted'){
+startNtfySubscription(saved.topic,saved.server);
+}
+}
+}catch(error){
+console.warn('Не удалось восстановить настройки ntfy:',error);
+}
+
 
 $('add').addEventListener('click',addChannel);
 
