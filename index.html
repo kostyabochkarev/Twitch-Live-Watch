@@ -719,22 +719,22 @@ const NTFY_TEST_ALERTS={
 started:{
 label:'начало эфира',
 title:'Stream started',
-message:'👾 ТестовыйКанал завёл стрим\\nПроверка уведомления: новый эфир\\n\\nИграет в: Just Chatting\\nЗрителей: 128\\n\\ntwitch.tv/skillightv'
+message:'👾 ТестовыйКанал завёл стрим\nПроверка уведомления: новый эфир\n\nИграет в: Just Chatting\nЗрителей: 128\n\ntwitch.tv/skillightv'
 },
 ended:{
 label:'окончание эфира',
 title:'Stream ended',
-message:'Стрим ТестовыйКанал закончился.\\nЗрителей на стриме: 128 (последнее известное значение)\\n\\nПроверка уведомления об окончании эфира\\nИгра: Just Chatting\\n\\n____\\nСтрим сейчас оффлайн\\n\\ntwitch.tv/skillightv'
+message:'Стрим ТестовыйКанал закончился.\nЗрителей на стриме: 128 (последнее известное значение)\n\nПроверка уведомления об окончании эфира\nИгра: Just Chatting\n\n____\nСтрим сейчас оффлайн\n\ntwitch.tv/skillightv'
 },
 'live-updated':{
 label:'изменение статуса во время эфира',
 title:'Live stream updated',
-message:'ТестовыйКанал обновил статус:\\n\\nПроверка: изменилось название трансляции или категория\\n\\nИграет в: Just Chatting\\n\\ntwitch.tv/skillightv'
+message:'ТестовыйКанал обновил статус:\n\nПроверка: изменилось название трансляции или категория\n\nИграет в: Just Chatting\n\ntwitch.tv/skillightv'
 },
 'offline-updated':{
 label:'изменение статуса офлайн',
 title:'Channel status updated',
-message:'ТестовыйКанал обновил статус:\\n\\nПроверка: изменилось название или категория канала\\nИгра: Just Chatting\\n____\\nСтрим сейчас оффлайн\\n\\ntwitch.tv/skillightv'
+message:'ТестовыйКанал обновил статус:\n\nПроверка: изменилось название или категория канала\nИгра: Just Chatting\n____\nСтрим сейчас оффлайн\n\ntwitch.tv/skillightv'
 }
 };
 
@@ -748,7 +748,7 @@ let server;
 try{
 const parsed=new URL($('ntfyServerInput').value.trim()||'https://ntfy.sh');
 if(parsed.protocol!=='https:')throw new Error('Используй HTTPS-адрес сервера ntfy.');
-server=parsed.origin+parsed.pathname.replace(/\\/+$/,'');
+server=parsed.origin+parsed.pathname.replace(/\/+$/,'');
 }catch(error){
 setNotificationStatus(error.message||'Некорректный адрес ntfy-сервера.','error');
 return;
@@ -769,7 +769,7 @@ return;
 const testId='TLW-TEST-'+type.toUpperCase()+'-'+Date.now();
 const params=new URLSearchParams({
 title:'Twitch Live Watch: '+alert.title,
-message:testId+'\\n'+alert.message,
+message:testId+'\n'+alert.message,
 priority:'high',
 tags:'twitch,video',
 click:'https://www.twitch.tv/skillightv'
@@ -779,7 +779,9 @@ pendingNtfyTestIds.set(testId,alert.label);
 setNotificationStatus('Отправляю тест «'+alert.label+'»…','');
 try{
 await fetch(url,{method:'GET',mode:'no-cors',cache:'no-store'});
+if(pendingNtfyTestIds.has(testId)){
 setNotificationStatus('Тест «'+alert.label+'» отправлен. Жду подтверждение от ntfy…','');
+}
 }catch(error){
 pendingNtfyTestIds.delete(testId);
 setNotificationStatus('Не удалось отправить тест «'+alert.label+'»: '+(error.message||error),'error');
