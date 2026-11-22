@@ -677,17 +677,25 @@ server=parsed.origin+parsed.pathname.replace(/\/+$/,'');
 setNotificationStatus(error.message||'Некорректный адрес ntfy-сервера.','error');
 return;
 }
+let saved;
+try{
+saved=JSON.parse(localStorage.getItem(NTFY_SETTINGS_KEY)||'null');
+}catch{}
+if(!saved||saved.topic!==topic||saved.server!==server||ntfySource.readyState!==1){
+setNotificationStatus('Подписка не подключена к этой теме. Нажми «Включить уведомления» ещё раз и дождись статуса «Подключено».','error');
+return;
+}
 pendingNtfyTestId='TLW-TEST-'+Date.now();
 const message=pendingNtfyTestId+' Проверка реальной доставки Twitch Live Watch.';
 setNotificationStatus('Отправляю тестовое сообщение через ntfy…','');
 try{
-const response=await fetch(server+'/'+encodeURIComponent(topic),{
+await fetch(server+'/'+encodeURIComponent(topic),{
 method:'POST',
 body:message,
+mode:'no-cors',
 cache:'no-store'
 });
-if(!response.ok)throw new Error('ntfy вернул HTTP '+response.status);
-setNotificationStatus('ntfy принял тест. Жду, когда сообщение вернётся по активной подписке…','');
+setNotificationStatus('Запрос отправлен. Жду подтверждение от активной подписки ntfy…','');
 }catch(error){
 pendingNtfyTestId='';
 setNotificationStatus('Не удалось отправить тест в ntfy: '+(error.message||error)+'. Проверь сервер, тему и подключение к интернету.','error');
