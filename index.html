@@ -567,10 +567,50 @@ return '';
 
 let pendingNtfyTestId='';
 
+let ntfyServiceWorkerPromise=null;
+
+async function getNtfyServiceWorkerRegistration(){
+if(!('serviceWorker' in navigator)){
+throw new Error('Этот браузер не поддерживает Service Worker.');
+}
+if(!window.isSecureContext){
+throw new Error('Для системных уведомлений нужен защищённый HTTPS-сайт.');
+}
+if(!ntfyServiceWorkerPromise){
+ntfyServiceWorkerPromise=navigator.serviceWorker.register('./sw.js',{scope:'./'})
+.then(async registration=>{
+await navigator.serviceWorker.ready;
+return registration;
+})
+.catch(error=>{
+ntfyServiceWorkerPromise=null;
+throw error;
+});
+}
+return ntfyServiceWorkerPromise;
+}
+
+async function showNtfySystemNotification(title,message,data){
+try{
+const registration=await getNtfyServiceWorkerRegistration();
+if(typeof registration.showNotification!=='function'){
+throw new Error('Service Worker не поддерживает показ системных уведомлений.');
+}
+const clickUrl=twitchClickUrl(data.click);
+await registration.showNotification(title,{
+body:message,
+tag:'tlw-'+String(data.id||Date.now()),
+renotify:true,
+data:{url:clickUrl||new URL('./',window.location.href).href}
+});
+}catch(error){
+setNotificationStatus('Сообщение получено, но системное уведомление не показано: '+(error.message||error),'error');
+}
+}
+
 function displayNtfyMessage(data){
 const title=String(data.title||'Twitch Live Watch').replace(/^Twitch Live Watch:\s*/i,'');
 const message=String(data.message||'Новое уведомление Twitch Live Watch');
-const clickUrl=twitchClickUrl(data.click);
 addNotificationToFeed(title,message);
 
 if(pendingNtfyTestId&&message.includes(pendingNtfyTestId)){
@@ -579,20 +619,7 @@ pendingNtfyTestId='';
 }
 
 if('Notification' in window&&Notification.permission==='granted'){
-try{
-const notice=new Notification(title,{
-body:message,
-tag:'tlw-'+String(data.id||Date.now()),
-renotify:true
-});
-notice.onclick=()=>{
-window.focus();
-if(clickUrl)window.open(clickUrl,'_blank','noopener');
-notice.close();
-};
-}catch(error){
-setNotificationStatus('Сообщение получено, но браузер не смог показать системное уведомление: '+(error.message||error),'error');
-}
+void showNtfySystemNotification(title,message,data);
 }
 }
 
@@ -656,6 +683,13 @@ permission=await Notification.requestPermission();
 }
 if(permission!=='granted'){
 setNotificationStatus('Разреши уведомления для этого сайта в настройках браузера.','error');
+return;
+}
+setNotificationStatus('Подключаю службу системных уведомлений…','');
+try{
+await getNtfyServiceWorkerRegistration();
+}catch(error){
+setNotificationStatus('Не удалось подключить службу уведомлений: '+(error.message||error),'error');
 return;
 }
 localStorage.setItem(NTFY_SETTINGS_KEY,JSON.stringify({topic,server}));
