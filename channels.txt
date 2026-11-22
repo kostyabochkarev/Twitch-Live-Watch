@@ -1,0 +1,2 @@
+# One Twitch login per line. Add more channels below.
+skillightv

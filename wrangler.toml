@@ -1,0 +1,10 @@
+name = "twitch-live-watch-background"
+main = "worker.js"
+compatibility_date = "2026-11-23"
+
+[triggers]
+crons = ["*/5 * * * *"]
+
+[[kv_namespaces]]
+binding = "DATA"
+id = "PASTE_YOUR_KV_NAMESPACE_ID_HERE"
