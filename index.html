@@ -602,6 +602,9 @@ tar{width:72px!important;height:72px!important;font-size:27px!important}
 <h2>Фоновая работа и уведомления</h2>
 <p class="help">Чтобы получать уведомления даже после полного закрытия этой страницы, подключи фоновый сервер. Он будет проверять каналы каждые 5 минут, а приложение ntfy доставит уведомление на телефон.</p>
 <div class="notice">Нужна одноразовая настройка Cloudflare Worker и приложение ntfy на Android. После настройки страницу Twitch Live Watch можно закрывать. Сам мониторинг будет продолжаться на сервере.</div>
+<div class="row" style="margin-top:13px">
+<button type="button" onclick="window.open('https://github.com/kostyabochkarev/Twitch-Live-Watch/actions/workflows/test-notifications.yml','_blank','noopener')">🔔 Проверить уведомления</button>
+</div>
 <div class="row" style="margin-top:13px"><input id="workerUrl" placeholder="Адрес Cloudflare Worker (https://…workers.dev)" autocapitalize="none" spellcheck="false"><input id="workerKey" placeholder="Секретный ключ ADMIN_TOKEN" autocomplete="off" autocapitalize="none" spellcheck="false"><button id="connectBackground">Подключить фоновый режим</button></div>
 <p class="help" id="backgroundStatus" aria-live="polite">Фоновый режим пока не подключён.</p>
 <div class="notice" id="topicBox" hidden>Тема ntfy: <strong id="topicValue"></strong><br>Установи ntfy на Android и подпишись на эту тему, чтобы получать push-уведомления.</div>
